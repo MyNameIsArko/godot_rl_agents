@@ -225,13 +225,18 @@ class GodotEnv:
         response["obs"] = self._process_obs(response["obs"])
 
         # Kept for backward compatibility if the plugin doesn't send info.
-        default_info = [{}] * len(response["done"])
+        terminated = response.get("terminated", response.get("done"))
+        if terminated is None:
+            raise ValueError("step response must contain terminated or done")
+        terminated = np.atleast_1d(terminated).tolist()
+        truncated = np.atleast_1d(response.get("truncated", [False] * len(terminated))).tolist()
+        default_info = [{}] * len(terminated)
 
         return (
             response["obs"],
             response["reward"],
-            np.array(response["done"]).tolist(),
-            np.array(response["done"]).tolist(),  # TODO update API to term, trunc
+            terminated,
+            truncated,
             response.get("info", default_info),
         )
 
@@ -252,7 +257,7 @@ class GodotEnv:
 
         return response_obs
 
-    def reset(self, seed=None):
+    def reset(self, seed=None, options=None):
         """
         Reset the Godot environment.
 
@@ -262,6 +267,8 @@ class GodotEnv:
         message = {
             "type": "reset",
         }
+        if seed is not None:
+            message["seed"] = int(seed)
         self._send_as_json(message)
         response = self._get_json_dict()
         response["obs"] = self._process_obs(response["obs"])
