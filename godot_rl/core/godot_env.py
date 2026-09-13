@@ -75,32 +75,36 @@ class GodotEnv:
 
         self.port = port
         self.host_binding = kwargs.get("host_binding", False)
-        self.connection = self._start_server()
-        self.num_envs = None
-        self._handshake()
+        try:
+            self.connection = self._start_server()
+            self.num_envs = None
+            self._handshake()
 
-        # Action and observation spaces for each in-game agent/env/AIController (used only for multi-agent case with Rllib for now)
-        self.action_spaces = []
-        self.observation_spaces = []
+            # Action and observation spaces for each in-game agent/env/AIController (used only for multi-agent case with Rllib for now)
+            self.action_spaces = []
+            self.observation_spaces = []
 
-        self._get_env_info()
+            self._get_env_info()
 
-        # Single-agent observation space
-        self.observation_space = self.observation_spaces[0]
+            # Single-agent observation space
+            self.observation_space = self.observation_spaces[0]
 
-        # sf2 requires a tuple action space
-        # Multiple agents' action space(s)
-        self.tuple_action_spaces = [
-            spaces.Tuple([v for _, v in action_space.items()]) for action_space in self.action_spaces
-        ]
-        # Single agent action space processor using the action space(s) of the first agent
-        self.action_space_processor = ActionSpaceProcessor(self.tuple_action_spaces[0], convert_action_space)
+            # sf2 requires a tuple action space
+            # Multiple agents' action space(s)
+            self.tuple_action_spaces = [
+                spaces.Tuple([v for _, v in action_space.items()]) for action_space in self.action_spaces
+            ]
+            # Single agent action space processor using the action space(s) of the first agent
+            self.action_space_processor = ActionSpaceProcessor(self.tuple_action_spaces[0], convert_action_space)
 
-        # For multi-policy envs: The name of each agent's policy set in the env itself (any training_mode
-        # AIController instance is treated as an agent)
-        self.agent_policy_names
+            # For multi-policy envs: The name of each agent's policy set in the env itself (any training_mode
+            # AIController instance is treated as an agent)
+            self.agent_policy_names
 
-        atexit.register(self._close)
+            atexit.register(self._close)
+        except BaseException:
+            self.close()
+            raise
 
     def _set_platform_suffix(self, env_path: str) -> str:
         """
