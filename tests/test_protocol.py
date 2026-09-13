@@ -5,7 +5,15 @@ import threading
 
 import pytest
 
-from godot_rl.core.protocol import MAX_FRAME_SIZE, ProtocolError, encode_frame, recv_frame
+from godot_rl.core.protocol import (
+    MAX_FRAME_SIZE,
+    PROTOCOL_V2_MAJOR,
+    ProtocolError,
+    encode_frame,
+    make_handshake,
+    recv_frame,
+    validate_handshake,
+)
 
 
 def test_frame_handles_fragmented_reads():
@@ -56,3 +64,14 @@ def test_frame_body_must_be_a_json_object():
         recv_frame(receiver)
     sender.close()
     receiver.close()
+
+
+def test_protocol_two_handshake_requires_version_zero():
+    message = make_handshake(PROTOCOL_V2_MAJOR)
+    validate_handshake(message, PROTOCOL_V2_MAJOR)
+
+    with pytest.raises(ProtocolError, match="minor mismatch"):
+        validate_handshake(
+            {"type": "handshake", "protocol": {"major": PROTOCOL_V2_MAJOR, "minor": 1}},
+            PROTOCOL_V2_MAJOR,
+        )

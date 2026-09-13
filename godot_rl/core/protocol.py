@@ -9,6 +9,9 @@ import struct
 MAX_FRAME_SIZE = 16 * 1024 * 1024
 CONNECTION_TIMEOUT = 30
 READ_TIMEOUT = 60
+PROTOCOL_MAJOR = 1
+PROTOCOL_V2_MAJOR = 2
+PROTOCOL_MINOR = 0
 _LENGTH = struct.Struct("<I")
 
 
@@ -69,3 +72,21 @@ def recv_frame(connection):
 
 def send_frame(connection, message):
     connection.sendall(encode_frame(message))
+
+
+def make_handshake(expected_major=PROTOCOL_MAJOR):
+    return {"type": "handshake", "protocol": {"major": expected_major, "minor": PROTOCOL_MINOR}}
+
+
+def validate_handshake(message, expected_major=PROTOCOL_MAJOR):
+    if message.get("type") != "handshake":
+        raise ProtocolError("expected handshake message")
+    protocol = message.get("protocol")
+    if not isinstance(protocol, dict):
+        raise ProtocolError("handshake is missing protocol version")
+    if protocol.get("major") != expected_major:
+        raise ProtocolError(f"protocol major mismatch: peer={protocol.get('major')}, expected={expected_major}")
+    if expected_major == PROTOCOL_V2_MAJOR and protocol.get("minor") != PROTOCOL_MINOR:
+        raise ProtocolError(
+            f"protocol minor mismatch: peer={protocol.get('minor')}, expected={PROTOCOL_MINOR}"
+        )
