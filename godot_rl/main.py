@@ -21,6 +21,11 @@ gdrl --env_path path/to/exported/executable ---config_path path/to/yaml/file
 """
 
 import argparse
+import importlib.util
+import json
+import pathlib
+import socket
+import sys
 import warnings
 
 try:
@@ -53,6 +58,45 @@ except ImportError as e:
             "Import error importing sample-factory If you have not installed the package, try: pip install godot-rl[sf]"
         )
         print("Otherwise try fixing the error.", error_message)
+
+
+def _doctor_report(env_path, port):
+    report = {"ok": True, "environment": {}, "dependencies": {}, "port": {"ok": False, "value": port}}
+
+    if env_path == "debug":
+        report["environment"] = {"ok": True, "path": "debug"}
+    elif env_path:
+        suffix = {"linux": ".x86_64", "linux2": ".x86_64", "darwin": ".app", "win32": ".exe"}.get(sys.platform)
+        path = pathlib.Path(env_path).expanduser()
+        if suffix:
+            path = path.with_suffix(suffix)
+        report["environment"] = {"ok": path.is_file(), "path": str(path)}
+    else:
+        report["environment"] = {"ok": False, "path": None}
+
+    for name in ("gymnasium", "numpy", "stable_baselines3"):
+        report["dependencies"][name] = importlib.util.find_spec(name) is not None
+
+    if isinstance(port, int) and 1 <= port <= 65535:
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listener:
+                listener.bind(("127.0.0.1", port))
+            report["port"]["ok"] = True
+        except OSError:
+            pass
+
+    report["ok"] = report["environment"]["ok"] and all(report["dependencies"].values()) and report["port"]["ok"]
+    return report
+
+
+def doctor(argv):
+    parser = argparse.ArgumentParser(prog="gdrl doctor")
+    parser.add_argument("--env_path", help="Godot executable or debug")
+    parser.add_argument("--port", default=11008, type=int)
+    args = parser.parse_args(argv)
+    report = _doctor_report(args.env_path, args.port)
+    print(json.dumps(report, indent=2, sort_keys=True))
+    return 0 if report["ok"] else 1
 
 
 def get_args():
@@ -95,6 +139,9 @@ def get_args():
 
 
 def main():
+    if len(sys.argv) > 1 and sys.argv[1] == "doctor":
+        return doctor(sys.argv[2:])
+
     warnings.warn(
         "This use of gdrl is deprecated and will be removed in version 1.0, please refer to the examples in the github repo",
         DeprecationWarning,
