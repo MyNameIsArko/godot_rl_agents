@@ -52,7 +52,7 @@ def test_frame_body_must_be_a_json_object():
     sender, receiver = socket.socketpair()
     body = json.dumps(["not", "an", "object"]).encode()
     sender.sendall(struct.pack("<I", len(body)) + body)
-    with pytest.raises(ProtocolError, match="JSON object"):
+    with pytest.raises(ProtocolError, match="must be an object"):
         recv_frame(receiver)
     sender.close()
     receiver.close()
