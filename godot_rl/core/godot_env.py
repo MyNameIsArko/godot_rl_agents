@@ -2,9 +2,9 @@ import atexit
 import json
 import os
 import pathlib
+import signal
 import socket
 import subprocess
-import time
 from collections import OrderedDict
 from sys import platform
 from typing import Optional
@@ -13,13 +13,20 @@ import numpy as np
 from gymnasium import spaces
 
 from godot_rl.core.utils import ActionSpaceProcessor, convert_macos_path
+from godot_rl.core.protocol import (
+    CONNECTION_TIMEOUT,
+    READ_TIMEOUT,
+    ProtocolError,
+    recv_frame,
+    send_frame,
+)
 
 
 class GodotEnv:
     MAJOR_VERSION = "0"  # Versioning for the environment
     MINOR_VERSION = "7"
     DEFAULT_PORT = 11008  # Default port for communication with Godot Game
-    DEFAULT_TIMEOUT = 60  # Default socket timeout TODO
+    DEFAULT_TIMEOUT = READ_TIMEOUT
 
     def __init__(
         self,
@@ -48,6 +55,7 @@ class GodotEnv:
         """
 
         self.proc = None
+        self._closed = False
         if env_path is not None and env_path != "debug":
             env_path = self._set_platform_suffix(env_path)
 
@@ -67,32 +75,36 @@ class GodotEnv:
 
         self.port = port
         self.host_binding = kwargs.get("host_binding", False)
-        self.connection = self._start_server()
-        self.num_envs = None
-        self._handshake()
+        try:
+            self.connection = self._start_server()
+            self.num_envs = None
+            self._handshake()
 
-        # Action and observation spaces for each in-game agent/env/AIController (used only for multi-agent case with Rllib for now)
-        self.action_spaces = []
-        self.observation_spaces = []
+            # Action and observation spaces for each in-game agent/env/AIController (used only for multi-agent case with Rllib for now)
+            self.action_spaces = []
+            self.observation_spaces = []
 
-        self._get_env_info()
+            self._get_env_info()
 
-        # Single-agent observation space
-        self.observation_space = self.observation_spaces[0]
+            # Single-agent observation space
+            self.observation_space = self.observation_spaces[0]
 
-        # sf2 requires a tuple action space
-        # Multiple agents' action space(s)
-        self.tuple_action_spaces = [
-            spaces.Tuple([v for _, v in action_space.items()]) for action_space in self.action_spaces
-        ]
-        # Single agent action space processor using the action space(s) of the first agent
-        self.action_space_processor = ActionSpaceProcessor(self.tuple_action_spaces[0], convert_action_space)
+            # sf2 requires a tuple action space
+            # Multiple agents' action space(s)
+            self.tuple_action_spaces = [
+                spaces.Tuple([v for _, v in action_space.items()]) for action_space in self.action_spaces
+            ]
+            # Single agent action space processor using the action space(s) of the first agent
+            self.action_space_processor = ActionSpaceProcessor(self.tuple_action_spaces[0], convert_action_space)
 
-        # For multi-policy envs: The name of each agent's policy set in the env itself (any training_mode
-        # AIController instance is treated as an agent)
-        self.agent_policy_names
+            # For multi-policy envs: The name of each agent's policy set in the env itself (any training_mode
+            # AIController instance is treated as an agent)
+            self.agent_policy_names
 
-        atexit.register(self._close)
+            atexit.register(self._close)
+        except BaseException:
+            self.close()
+            raise
 
     def _set_platform_suffix(self, env_path: str) -> str:
         """
@@ -268,17 +280,30 @@ class GodotEnv:
         return response["returns"]
 
     def close(self):
-        message = {
-            "type": "close",
-        }
-        self._send_as_json(message)
-        print("close message sent")
-        time.sleep(1.0)
-        self.connection.close()
+        if self._closed:
+            return
+        self._closed = True
+        connection = getattr(self, "connection", None)
+        if connection is not None:
+            try:
+                connection.settimeout(2.0)
+                send_frame(connection, {"type": "close"})
+            except (OSError, ProtocolError):
+                pass
+            finally:
+                connection.close()
+                self.connection = None
+        process = self.proc
+        if process is not None and process.poll() is None:
+            if not _wait_for_process(process, 2):
+                _terminate_process(process)
+                if not _wait_for_process(process, 2):
+                    _kill_process(process)
+                    _wait_for_process(process, 2)
         try:
             atexit.unregister(self._close)
-        except Exception as e:
-            print("exception unregistering close method", e)
+        except ValueError:
+            pass
 
     @property
     def action_space(self):
@@ -343,10 +368,12 @@ class GodotEnv:
 
         # Listen for incoming connections
         sock.listen(1)
-        sock.settimeout(GodotEnv.DEFAULT_TIMEOUT)
-        connection, client_address = sock.accept()
-        # connection.settimeout(GodotEnv.DEFAULT_TIMEOUT)
-        #        connection.setblocking(False) TODO
+        sock.settimeout(CONNECTION_TIMEOUT)
+        try:
+            connection, _ = sock.accept()
+            connection.settimeout(READ_TIMEOUT)
+        finally:
+            sock.close()
         print("connection established")
         return connection
 
@@ -438,12 +465,10 @@ class GodotEnv:
         return np.frombuffer(bytes.fromhex(hex_string), dtype=np.uint8).reshape(shape)
 
     def _send_as_json(self, dictionary):
-        message_json = json.dumps(dictionary)
-        self._send_string(message_json)
+        send_frame(self.connection, dictionary)
 
     def _get_json_dict(self):
-        data = self._get_data()
-        return json.loads(data)
+        return recv_frame(self.connection)
 
     def _get_obs(self):
         return self._get_data()
@@ -460,43 +485,45 @@ class GodotEnv:
         self.connection.setblocking(True)
 
     def _get_data(self):
-        try:
-            # Receive the size (in bytes) of the remaining data to receive
-            string_size_bytes: bytearray = bytearray()
-            received_length: int = 0
-
-            # The first 4 bytes contain the length of the remaining data
-            length: int = 4
-
-            while received_length < length:
-                data = self.connection.recv(length - received_length)
-                received_length += len(data)
-                string_size_bytes.extend(data)
-
-            length = int.from_bytes(string_size_bytes, "little")
-
-            # Receive the rest of the data
-            string_bytes: bytearray = bytearray()
-            received_length = 0
-
-            while received_length < length:
-                data = self.connection.recv(length - received_length)
-                received_length += len(data)
-                string_bytes.extend(data)
-
-            string: str = string_bytes.decode()
-
-            return string
-        except socket.timeout as e:
-            print("env timed out", e)
-        return None
+        return json.dumps(recv_frame(self.connection))
 
     def _send_string(self, string):
-        message = len(string).to_bytes(4, "little") + bytes(string.encode())
+        body = string.encode("utf-8")
+        message = len(body).to_bytes(4, "little") + body
         self.connection.sendall(message)
 
     def _send_action(self, action):
         self._send_string(action)
+
+
+def _wait_for_process(process, timeout):
+    if process.poll() is not None:
+        return True
+    try:
+        process.wait(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        return False
+    return True
+
+
+def _terminate_process(process):
+    if platform == "win32":
+        process.terminate()
+        return
+    try:
+        os.killpg(os.getpgid(process.pid), signal.SIGTERM)
+    except (AttributeError, OSError, ProcessLookupError):
+        process.terminate()
+
+
+def _kill_process(process):
+    if platform == "win32":
+        process.kill()
+        return
+    try:
+        os.killpg(os.getpgid(process.pid), signal.SIGKILL)
+    except (AttributeError, OSError, ProcessLookupError):
+        process.kill()
 
 
 def interactive():
