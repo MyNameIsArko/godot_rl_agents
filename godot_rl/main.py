@@ -21,6 +21,7 @@ gdrl --env_path path/to/exported/executable ---config_path path/to/yaml/file
 """
 
 import argparse
+import sys
 import warnings
 
 try:
@@ -95,6 +96,10 @@ def get_args():
 
 
 def main():
+    if len(sys.argv) > 1 and sys.argv[1] in {"init", "doctor", "validate", "train"}:
+        from godot_rl.project_cli import main as project_main
+
+        return project_main(sys.argv[1:])
     warnings.warn(
         "This use of gdrl is deprecated and will be removed in version 1.0, please refer to the examples in the github repo",
         DeprecationWarning,
@@ -117,4 +122,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
