@@ -1,0 +1,15 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://agent.gd" id="1_agent"]
+[ext_resource type="Script" path="res://addons/godot_rl_agents/sync.gd" id="2_sync"]
+
+[node name="Training" type="Node2D"]
+
+[node name="Agent" type="Node2D" parent="."]
+script = ExtResource("1_agent")
+reset_after = 1000000
+
+[node name="Sync" type="Node" parent="."]
+script = ExtResource("2_sync")
+action_repeat = 1
+speed_up = 8.0
