@@ -139,9 +139,15 @@ def get_args():
 
 
 def main():
+    if len(sys.argv) > 1 and (
+        sys.argv[1] in {"init", "validate", "train", "self-play", "evaluate"}
+        or sys.argv[1] == "doctor" and "--project" in sys.argv[2:]
+    ):
+        from godot_rl.project_cli import main as project_main
+
+        return project_main(sys.argv[1:])
     if len(sys.argv) > 1 and sys.argv[1] == "doctor":
         return doctor(sys.argv[2:])
-
     warnings.warn(
         "This use of gdrl is deprecated and will be removed in version 1.0, please refer to the examples in the github repo",
         DeprecationWarning,
@@ -164,4 +170,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

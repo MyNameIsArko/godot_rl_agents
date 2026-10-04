@@ -1,0 +1,21 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://self_play_agent.gd" id="1_agent"]
+[ext_resource type="Script" path="res://addons/godot_rl_agents/sync.gd" id="2_sync"]
+
+[node name="SelfPlayTraining" type="Node2D"]
+
+[node name="Player0" type="Node2D" parent="."]
+script = ExtResource("1_agent")
+agent_id = "player_0"
+reset_after = 1000
+
+[node name="Player1" type="Node2D" parent="."]
+script = ExtResource("1_agent")
+agent_id = "player_1"
+reset_after = 1000
+
+[node name="Sync" type="Node" parent="."]
+script = ExtResource("2_sync")
+action_repeat = 1
+speed_up = 8.0
