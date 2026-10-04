@@ -12,9 +12,19 @@ from typing import Any, ClassVar
 import gymnasium as gym
 import numpy as np
 
-from godot_rl.core.protocol import (CONNECTION_TIMEOUT, DEFAULT_HOST, PROTOCOL_MAJOR, PROTOCOL_MINOR, READ_TIMEOUT,
-                                    ProtocolError, make_handshake, recv_frame, send_frame, validate_finite,
-                                    validate_handshake)
+from godot_rl.core.protocol import (  # isort: skip
+    CONNECTION_TIMEOUT,
+    DEFAULT_HOST,
+    PROTOCOL_MAJOR,
+    PROTOCOL_MINOR,
+    READ_TIMEOUT,
+    ProtocolError,
+    make_handshake,
+    recv_frame,
+    send_frame,
+    validate_finite,
+    validate_handshake,
+)
 
 
 class _GodotProcessSession:
