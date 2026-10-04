@@ -14,13 +14,15 @@ class SBGSingleObsEnv(StableBaselinesGodotEnv):
         super().__init__(*args, **kwargs)
         self.observation_space = self.envs[0].observation_space[self.obs_key]
 
-    def step(self, action: np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray, List[Dict[str, Any]]]:
-        obs, rewards, term, info = super().step(action)
+    def step_wait(self) -> Tuple[np.ndarray, np.ndarray, np.ndarray, List[Dict[str, Any]]]:
+        obs, rewards, term, info = super().step_wait()
 
         # Terminal obs info is needed for imitation learning
         for idx, done in enumerate(term):
             if done:
-                info[idx]["terminal_observation"] = obs[self.obs_key][idx]
+                terminal = info[idx]["terminal_observation"]
+                if isinstance(terminal, dict):
+                    info[idx]["terminal_observation"] = terminal[self.obs_key]
 
         return obs[self.obs_key], rewards, term, info
 

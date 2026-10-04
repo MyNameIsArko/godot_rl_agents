@@ -102,8 +102,8 @@ class StableBaselinesGodotEnv(VecEnv):
         for index, done in enumerate(dones):
             if done:
                 all_info[index] = dict(all_info[index])
-                all_info[index]["terminal_observation"] = all_obs[index]
-                all_info[index]["TimeLimit.truncated"] = bool(all_trunc[index])
+                all_info[index].setdefault("terminal_observation", all_obs[index])
+                all_info[index]["TimeLimit.truncated"] = bool(all_trunc[index] and not all_term[index])
 
         # Return results
         return (
