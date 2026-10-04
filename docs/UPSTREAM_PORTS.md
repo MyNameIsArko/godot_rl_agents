@@ -16,6 +16,7 @@ Both fork `main` branches contain the contributions, and the feature branches re
 | Branch | Review base | Change |
 | --- | --- | --- |
 | `sb3-episode-handling` | `sb3-vecenv` | Preserve final observations and support asynchronous single-observation training. |
+| `doctor-app-bundles` | `doctor` | Recognize the executable inside a macOS app bundle. |
 | `project-environment` | `protocol-two` | Launch a Godot project as a single-agent Gymnasium environment. |
 | `project-sb3` | `project-environment` | Adapt the project environment to SB3 and reset completed episodes. |
 | `two-agent-environment` | `project-sb3` | Exchange actions and results for two players in one game. |

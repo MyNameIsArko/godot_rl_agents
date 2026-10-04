@@ -70,7 +70,10 @@ def _doctor_report(env_path, port):
         path = pathlib.Path(env_path).expanduser()
         if suffix:
             path = path.with_suffix(suffix)
-        report["environment"] = {"ok": path.is_file(), "path": str(path)}
+        executable = path
+        if suffix == ".app":
+            executable = path / "Contents" / "MacOS" / path.stem
+        report["environment"] = {"ok": executable.is_file(), "path": str(path)}
     else:
         report["environment"] = {"ok": False, "path": None}
 
