@@ -19,7 +19,7 @@ from godot_rl import project_cli as cli
 def make_project(tmp_path: Path) -> Path:
     project = tmp_path / "game"
     project.mkdir()
-    (project / "project.godot").write_text("[application]\nconfig/name=\"Test\"\n")
+    (project / "project.godot").write_text('[application]\nconfig/name="Test"\n')
     (project / "rl_training.tscn").write_text("[gd_scene format=3]\n")
     return project
 
@@ -31,27 +31,36 @@ def test_train_rejects_unsafe_names(tmp_path):
 
 
 def test_train_saves_interrupted_model_and_closes_environment(tmp_path, monkeypatch):
+    pytest.importorskip("stable_baselines3")
     project = make_project(tmp_path)
     (project / "rl").mkdir()
     (project / "rl/config.toml").write_text(cli.CONFIG_TEXT)
-    monkeypatch.setattr(cli, "doctor", lambda *args, **kwargs: {
-        "ok": True,
-        "godot": {"path": str(tmp_path / "Godot")},
-    })
+    monkeypatch.setattr(
+        cli,
+        "doctor",
+        lambda *args, **kwargs: {
+            "ok": True,
+            "godot": {"path": str(tmp_path / "Godot")},
+        },
+    )
+
     class Raw:
         def close(self):
             self.closed = True
 
     raw = Raw()
+
     class Vec:
         def __init__(self, environment):
             self.environment = environment
+
         def close(self):
             raw.close()
 
     class Model:
         def learn(self, total_timesteps):
             raise KeyboardInterrupt
+
         def save(self, path):
             Path(path + ".zip").touch()
 
@@ -64,6 +73,7 @@ def test_train_saves_interrupted_model_and_closes_environment(tmp_path, monkeypa
     import stable_baselines3
 
     from godot_rl.wrappers import project_sb3 as sb3_module
+
     monkeypatch.setattr(sb3_module, "GodotProjectVecEnv", Vec)
     monkeypatch.setattr(stable_baselines3, "PPO", FakePPO)
     monkeypatch.setattr(cli.subprocess, "run", lambda *args, **kwargs: None)
@@ -75,13 +85,18 @@ def test_train_saves_interrupted_model_and_closes_environment(tmp_path, monkeypa
 
 
 def test_train_omits_tensorboard_log_when_tensorboard_is_absent(tmp_path, monkeypatch):
+    pytest.importorskip("stable_baselines3")
     project = make_project(tmp_path)
     (project / "rl").mkdir()
     (project / "rl/config.toml").write_text(cli.CONFIG_TEXT)
-    monkeypatch.setattr(cli, "doctor", lambda *args, **kwargs: {
-        "ok": True,
-        "godot": {"path": str(tmp_path / "Godot")},
-    })
+    monkeypatch.setattr(
+        cli,
+        "doctor",
+        lambda *args, **kwargs: {
+            "ok": True,
+            "godot": {"path": str(tmp_path / "Godot")},
+        },
+    )
     monkeypatch.setitem(sys.modules, "tensorboard", None)
     seen = {}
 
@@ -113,13 +128,13 @@ def test_train_omits_tensorboard_log_when_tensorboard_is_absent(tmp_path, monkey
     import stable_baselines3
 
     from godot_rl.wrappers import project_sb3 as sb3_module
+
     monkeypatch.setattr(sb3_module, "GodotProjectVecEnv", Vec)
     monkeypatch.setattr(stable_baselines3, "PPO", FakePPO)
 
     assert cli.train_project(project, 1, "without-tensorboard", torch_threads=1) == 0
     assert "tensorboard_log" not in seen
     assert (project / "rl/runs/without-tensorboard").is_dir()
-
 
 
 def make_addon(tmp_path):
@@ -182,7 +197,9 @@ def test_doctor_reports_installed_addon_and_current_python(tmp_path, monkeypatch
     godot.touch()
     monkeypatch.setattr(cli, "_godot_version", lambda path: ("4.7.2", None))
     monkeypatch.setattr(cli, "_imports", lambda python: ({"gymnasium": "1.0.0", "stable_baselines3": "2.4.0"}, None))
-    monkeypatch.setattr(cli.subprocess, "run", lambda *args, **kwargs: subprocess.CompletedProcess(args, 0, "Python 3.13.2", ""))
+    monkeypatch.setattr(
+        cli.subprocess, "run", lambda *args, **kwargs: subprocess.CompletedProcess(args, 0, "Python 3.13.2", "")
+    )
     assert cli.main(["doctor", "--project", str(project), "--godot", str(godot)]) == 0
     report = json.loads(capsys.readouterr().out)
     assert report["ok"] and report["plugin"]["version"] == "0.8"

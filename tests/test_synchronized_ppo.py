@@ -15,18 +15,12 @@ import stable_baselines3
 from stable_baselines3 import PPO
 from stable_baselines3.common.buffers import RolloutBuffer
 from stable_baselines3.common.logger import Logger
-from stable_baselines3.common.policies import (
-    ActorCriticPolicy,
-    BasePolicy,
-    MultiInputActorCriticPolicy,
-)
+from stable_baselines3.common.policies import ActorCriticPolicy, BasePolicy, MultiInputActorCriticPolicy
 
 import godot_rl.training.self_play as self_play_module
 from godot_rl.training.self_play import SelfPlayTrainer, _SpaceOnlyEnv
 
-OBSERVATION_SPACE = gym.spaces.Dict(
-    {"obs": gym.spaces.Box(-1.0, 1.0, shape=(2,), dtype=np.float32)}
-)
+OBSERVATION_SPACE = gym.spaces.Dict({"obs": gym.spaces.Box(-1.0, 1.0, shape=(2,), dtype=np.float32)})
 ACTION_SPACE = gym.spaces.Dict({"action": gym.spaces.Discrete(2)})
 
 
@@ -79,8 +73,7 @@ class FakeEnv:
 
 class BoxObservationEnv(FakeEnv):
     observation_spaces: ClassVar = {
-        agent_id: gym.spaces.Box(-1.0, 1.0, shape=(2,), dtype=np.float32)
-        for agent_id in FakeEnv.agent_ids
+        agent_id: gym.spaces.Box(-1.0, 1.0, shape=(2,), dtype=np.float32) for agent_id in FakeEnv.agent_ids
     }
 
 
@@ -141,10 +134,7 @@ def test_direct_box_observations_select_mlp_policy():
     )
     assert all(model.n_envs == 1 for model in trainer.models.values())
     assert all(isinstance(model.policy, ActorCriticPolicy) for model in trainer.models.values())
-    assert all(
-        not isinstance(model.policy, MultiInputActorCriticPolicy)
-        for model in trainer.models.values()
-    )
+    assert all(not isinstance(model.policy, MultiInputActorCriticPolicy) for model in trainer.models.values())
 
 
 def test_shared_rollout_updates_both_models_once():
@@ -157,9 +147,7 @@ def test_shared_rollout_updates_both_models_once():
         def train(agent_id=agent_id, original=original):
             assert all(
                 buffer.full and buffer.pos == trainer.n_steps
-                for buffer in (
-                    candidate.rollout_buffer for candidate in trainer.models.values()
-                )
+                for buffer in (candidate.rollout_buffer for candidate in trainer.models.values())
             )
             train_calls.append(agent_id)
             trainer.env.events.append("train")
@@ -175,8 +163,7 @@ def test_shared_rollout_updates_both_models_once():
     ]
     assert trainer.env.events[-4:] == ["step", "step", "train", "train"]
     assert all(
-        model.rollout_buffer.full and model.rollout_buffer.pos == trainer.n_steps
-        for model in trainer.models.values()
+        model.rollout_buffer.full and model.rollout_buffer.pos == trainer.n_steps for model in trainer.models.values()
     )
     assert train_calls == ["player_0", "player_1"]
     assert [model.num_timesteps for model in trainer.models.values()] == [2, 2]
@@ -207,11 +194,15 @@ def test_both_policies_produce_outputs_before_each_shared_step():
         for action, value, log_prob in agent_outputs
     )
     events = [event for event in trainer.env.events if event != "reset"]
-    assert events == [
-        "player_0:policy",
-        "player_1:policy",
-        "step",
-    ] * 4
+    assert (
+        events
+        == [
+            "player_0:policy",
+            "player_1:policy",
+            "step",
+        ]
+        * 4
+    )
 
 
 def test_buffer_values_are_collected_before_policy_updates():
@@ -283,8 +274,8 @@ def test_partial_rollout_request_fails():
         trainer.learn(3)
 
 
-def test_compatibility_signatures_match_sb3_2_9():
-    assert stable_baselines3.__version__ == "2.9.0"
+def test_compatibility_signatures_match_supported_sb3_versions():
+    assert stable_baselines3.__version__ in {"2.4.0", "2.9.0"}
 
     positional = inspect.Parameter.POSITIONAL_OR_KEYWORD
     var_positional = inspect.Parameter.VAR_POSITIONAL
@@ -302,16 +293,45 @@ def test_compatibility_signatures_match_sb3_2_9():
     assert_signature(
         PPO.__init__,
         (
-            "self", "policy", "env", "learning_rate", "n_steps", "batch_size", "n_epochs",
-            "gamma", "gae_lambda", "clip_range", "clip_range_vf", "normalize_advantage",
-            "ent_coef", "vf_coef", "max_grad_norm", "use_sde", "sde_sample_freq",
-            "rollout_buffer_class", "rollout_buffer_kwargs", "target_kl", "stats_window_size",
-            "tensorboard_log", "policy_kwargs", "verbose", "seed", "device", "_init_setup_model",
+            "self",
+            "policy",
+            "env",
+            "learning_rate",
+            "n_steps",
+            "batch_size",
+            "n_epochs",
+            "gamma",
+            "gae_lambda",
+            "clip_range",
+            "clip_range_vf",
+            "normalize_advantage",
+            "ent_coef",
+            "vf_coef",
+            "max_grad_norm",
+            "use_sde",
+            "sde_sample_freq",
+            "rollout_buffer_class",
+            "rollout_buffer_kwargs",
+            "target_kl",
+            "stats_window_size",
+            "tensorboard_log",
+            "policy_kwargs",
+            "verbose",
+            "seed",
+            "device",
+            "_init_setup_model",
         ),
         defaults={
-            "n_steps": 2048, "batch_size": 64, "n_epochs": 10, "gamma": 0.99,
-            "gae_lambda": 0.95, "ent_coef": 0.0, "vf_coef": 0.5, "max_grad_norm": 0.5,
-            "seed": None, "_init_setup_model": True,
+            "n_steps": 2048,
+            "batch_size": 64,
+            "n_epochs": 10,
+            "gamma": 0.99,
+            "gae_lambda": 0.95,
+            "ent_coef": 0.0,
+            "vf_coef": 0.5,
+            "max_grad_norm": 0.5,
+            "seed": None,
+            "_init_setup_model": True,
         },
     )
     assert_signature(BasePolicy.__call__, ("self", "args", "kwargs"), kinds=(positional, var_positional, var_keyword))
@@ -332,7 +352,13 @@ def test_compatibility_signatures_match_sb3_2_9():
         PPO.load,
         ("path", "env", "device", "custom_objects", "print_system_info", "force_reset", "kwargs"),
         kinds=(positional, positional, positional, positional, positional, positional, var_keyword),
-        defaults={"env": None, "device": "auto", "custom_objects": None, "print_system_info": False, "force_reset": True},
+        defaults={
+            "env": None,
+            "device": "auto",
+            "custom_objects": None,
+            "print_system_info": False,
+            "force_reset": True,
+        },
     )
 
     assert len(get_args(get_type_hints(BasePolicy.obs_to_tensor)["return"])) == 2

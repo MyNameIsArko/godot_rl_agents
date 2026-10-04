@@ -14,16 +14,18 @@ import socket
 import subprocess
 import sys
 import tempfile
+
 try:
     import tomllib
 except ImportError:
     import tomli as tomllib
+
 from typing import Any
 
 import numpy as np
 
-from godot_rl.core.project_env import GodotProjectEnv
 from godot_rl.core.multi_agent_env import AGENT_IDS, GodotMultiAgentEnv
+from godot_rl.core.project_env import GodotProjectEnv
 
 SCHEMA_VERSION = 1
 SELF_PLAY_SCHEMA_VERSION = 2
@@ -64,16 +66,32 @@ max_grad_norm = 0.5
 [self_play]
 checkpoint_interval = 8192
 """
-RL_PYPROJECT_TEXT = '''[project]\nname = "godot-rl-project"\nversion = "0.1.0"\nrequires-python = ">=3.8"\ndependencies = ["godot_rl"]\n'''
+RL_PYPROJECT_TEXT = """[project]\nname = "godot-rl-project"\nversion = "0.1.0"\nrequires-python = ">=3.8"\ndependencies = ["godot_rl"]\n"""
 RL_GITIGNORE_TEXT = ".venv/\nmodels/\nruns/\n"
 TOP_LEVEL_KEYS = {"schema_version", "scene", "port", "seed", "speedup", "ppo"}
 PPO_KEYS = {"n_steps", "batch_size", "learning_rate", "ent_coef", "clip_range"}
 SELF_PLAY_TOP_LEVEL_KEYS = {
-    "schema_version", "mode", "scene", "port", "seed", "speedup", "agent_ids", "ppo", "self_play"
+    "schema_version",
+    "mode",
+    "scene",
+    "port",
+    "seed",
+    "speedup",
+    "agent_ids",
+    "ppo",
+    "self_play",
 }
 SELF_PLAY_PPO_KEYS = {
-    "n_steps", "batch_size", "n_epochs", "learning_rate", "gamma", "gae_lambda", "ent_coef",
-    "clip_range", "vf_coef", "max_grad_norm"
+    "n_steps",
+    "batch_size",
+    "n_epochs",
+    "learning_rate",
+    "gamma",
+    "gae_lambda",
+    "ent_coef",
+    "clip_range",
+    "vf_coef",
+    "max_grad_norm",
 }
 SELF_PLAY_KEYS = {"checkpoint_interval"}
 VERSION_RE = re.compile(r"\b(\d+)\.(\d+)(?:\.(\d+))?")
@@ -91,7 +109,7 @@ def _project_path(value: str | pathlib.Path) -> pathlib.Path:
 def _scene_path(project: pathlib.Path, scene: Any) -> pathlib.Path:
     if not isinstance(scene, str) or not scene.startswith("res://") or not scene.endswith(".tscn"):
         raise ValueError("scene must be a res:// path ending in .tscn")
-    relative = scene[len("res://"):]
+    relative = scene[len("res://") :]
     if not relative or "\\" in relative:
         raise ValueError("scene must stay inside res://")
     parts = pathlib.PurePosixPath(relative).parts
@@ -184,9 +202,7 @@ def _validate_schema_v2(config: dict[str, Any]) -> dict[str, Any]:
     for key in ("n_steps", "batch_size", "n_epochs"):
         if isinstance(ppo[key], bool) or not isinstance(ppo[key], int) or ppo[key] <= 0:
             raise ValueError(f"ppo.{key} must be a positive integer")
-    for key in (
-        "learning_rate", "gamma", "gae_lambda", "ent_coef", "clip_range", "vf_coef", "max_grad_norm"
-    ):
+    for key in ("learning_rate", "gamma", "gae_lambda", "ent_coef", "clip_range", "vf_coef", "max_grad_norm"):
         _positive_finite(ppo[key], f"ppo.{key}")
     if ppo["gamma"] > 1 or ppo["gae_lambda"] > 1 or ppo["clip_range"] > 1:
         raise ValueError("ppo.gamma, ppo.gae_lambda, and ppo.clip_range must not exceed 1")
@@ -253,9 +269,12 @@ def _addon_files(addon_path: str | pathlib.Path | None) -> list[tuple[pathlib.Pa
 
 
 def init_project(
-    project_value: str | pathlib.Path, scene: str, mode: str | None = None,
+    project_value: str | pathlib.Path,
+    scene: str,
+    mode: str | None = None,
     addon_path: str | pathlib.Path | None = None,
-    package_source: str | pathlib.Path | None = None, sync: bool = True,
+    package_source: str | pathlib.Path | None = None,
+    sync: bool = True,
 ) -> int:
     project = _project_path(project_value)
     _scene_path(project, scene)
@@ -402,8 +421,7 @@ def doctor(project_value: str | pathlib.Path, godot: str | None = None) -> dict[
         problems.append(str(exc))
 
     if config is not None and config.get("schema_version") == SELF_PLAY_SCHEMA_VERSION:
-        result.update({"mode": "self_play", "protocol": {"major": 2, "minor": 0},
-                       "agents": ["player_0", "player_1"]})
+        result.update({"mode": "self_play", "protocol": {"major": 2, "minor": 0}, "agents": ["player_0", "player_1"]})
     addon = project / "addons/godot_rl_agents"
     manifest = addon / "plugin.cfg"
     text = manifest.read_text(encoding="utf-8") if manifest.is_file() else ""
@@ -441,7 +459,9 @@ def doctor(project_value: str | pathlib.Path, godot: str | None = None) -> dict[
         problems.append(f"project virtual environment is missing: {python}")
     else:
         try:
-            python_result = subprocess.run([str(python), "--version"], capture_output=True, text=True, shell=False, check=False)
+            python_result = subprocess.run(
+                [str(python), "--version"], capture_output=True, text=True, shell=False, check=False
+            )
             version_match = VERSION_RE.search(python_result.stdout + python_result.stderr)
             python_version = version_match.group(0) if version_match else None
         except OSError:
@@ -545,8 +565,7 @@ def _validate_self_play_project(
             environment.observation_spaces[AGENT_IDS[0]] != environment.observation_spaces[agent_id]
             for agent_id in AGENT_IDS[1:]
         ) or any(
-            environment.action_spaces[AGENT_IDS[0]] != environment.action_spaces[agent_id]
-            for agent_id in AGENT_IDS[1:]
+            environment.action_spaces[AGENT_IDS[0]] != environment.action_spaces[agent_id] for agent_id in AGENT_IDS[1:]
         ):
             raise ValueError("self-play observation and action spaces must match")
         observations, infos = environment.reset(seed=config["seed"])
@@ -559,10 +578,7 @@ def _validate_self_play_project(
                 raise ValueError(f"reset.observations.{agent_id} is outside its space")
 
         for step in range(steps):
-            actions = {
-                agent_id: environment.action_spaces[agent_id].sample()
-                for agent_id in AGENT_IDS
-            }
+            actions = {agent_id: environment.action_spaces[agent_id].sample() for agent_id in AGENT_IDS}
             for agent_id, action in actions.items():
                 if not _finite_value(action) or not environment.action_spaces[agent_id].contains(action):
                     raise ValueError(f"step {step}.actions.{agent_id} is invalid")
@@ -582,9 +598,15 @@ def _validate_self_play_project(
             if any(terminated.values()) and any(truncated.values()):
                 raise ValueError(f"step {step} cannot be terminated and truncated together")
             for agent_id in AGENT_IDS:
-                if not _finite_value(observations[agent_id]) or not environment.observation_spaces[agent_id].contains(observations[agent_id]):
+                if not _finite_value(observations[agent_id]) or not environment.observation_spaces[agent_id].contains(
+                    observations[agent_id]
+                ):
                     raise ValueError(f"step {step}.observations.{agent_id} is invalid")
-                if isinstance(rewards[agent_id], bool) or not isinstance(rewards[agent_id], numbers.Real) or not math.isfinite(rewards[agent_id]):
+                if (
+                    isinstance(rewards[agent_id], bool)
+                    or not isinstance(rewards[agent_id], numbers.Real)
+                    or not math.isfinite(rewards[agent_id])
+                ):
                     raise ValueError(f"step {step}.rewards.{agent_id} must be finite")
                 if not isinstance(terminated[agent_id], bool) or not isinstance(truncated[agent_id], bool):
                     raise TypeError(f"step {step}.flags.{agent_id} must be boolean")
@@ -744,13 +766,8 @@ def self_play_project(
     if resume_path is not None:
         checkpoints_dir = model_dir / "checkpoints"
         resolved_checkpoints_dir = checkpoints_dir.resolve()
-        if (
-            resolved_checkpoints_dir != checkpoints_dir.absolute()
-            or resume_path.parent != resolved_checkpoints_dir
-        ):
-            raise ValueError(
-                "resume checkpoint must be under project/rl/models/<name>/checkpoints"
-            )
+        if resolved_checkpoints_dir != checkpoints_dir.absolute() or resume_path.parent != resolved_checkpoints_dir:
+            raise ValueError("resume checkpoint must be under project/rl/models/<name>/checkpoints")
         if not resume_path.is_dir():
             raise ValueError(f"resume checkpoint directory does not exist: {resume_path}")
 
@@ -792,9 +809,7 @@ def self_play_project(
                 **trainer_kwargs,
             )
             if timesteps <= trainer.completed_timesteps:
-                raise ValueError(
-                    "timesteps must exceed the completed timestep in the resumed checkpoint"
-                )
+                raise ValueError("timesteps must exceed the completed timestep in the resumed checkpoint")
         trainer.learn(timesteps)
         final_checkpoint = model_dir / "checkpoints" / f"{trainer.completed_timesteps:012d}"
         if final_checkpoint.exists():
@@ -846,8 +861,8 @@ def evaluate_project(
 
     environment: Any = None
     try:
-        from godot_rl.wrappers.project_sb3 import _batch_observation
         from godot_rl.training.self_play import SelfPlayTrainer
+        from godot_rl.wrappers.project_sb3 import _batch_observation
 
         try:
             state = json.loads((checkpoint_path / "state.json").read_text(encoding="utf-8"))
@@ -873,8 +888,7 @@ def evaluate_project(
             seed=config["seed"] if seed is None else seed,
         )
         totals = {
-            agent_id: {"wins": 0, "losses": 0, "draws": 0, "return": 0.0, "episodes": 0}
-            for agent_id in AGENT_IDS
+            agent_id: {"wins": 0, "losses": 0, "draws": 0, "return": 0.0, "episodes": 0} for agent_id in AGENT_IDS
         }
         for episode in range(episodes):
             swapped = episode >= episodes // 2
@@ -882,20 +896,14 @@ def evaluate_project(
                 AGENT_IDS[0]: AGENT_IDS[1] if swapped else AGENT_IDS[0],
                 AGENT_IDS[1]: AGENT_IDS[0] if swapped else AGENT_IDS[1],
             }
-            observations, _ = environment.reset(
-                seed=(config["seed"] if seed is None else seed) + episode
-            )
+            observations, _ = environment.reset(seed=(config["seed"] if seed is None else seed) + episode)
             finished = False
             episode_returns = {agent_id: 0.0 for agent_id in AGENT_IDS}
             for _ in range(max_steps):
                 actions = {}
                 for seat, policy_id in policy_for_seat.items():
-                    batched_observation = _batch_observation(
-                        observations[seat], environment.observation_spaces[seat]
-                    )
-                    raw_action, _ = trainer.models[policy_id].predict(
-                        batched_observation, deterministic=True
-                    )
+                    batched_observation = _batch_observation(observations[seat], environment.observation_spaces[seat])
+                    raw_action, _ = trainer.models[policy_id].predict(batched_observation, deterministic=True)
                     actions[seat] = trainer._environment_action(policy_id, raw_action)
                 observations, rewards, terminated, truncated, infos = environment.step(actions)
                 if set(terminated.values()) != {True} and set(terminated.values()) != {False}:
@@ -907,10 +915,7 @@ def evaluate_project(
                 for seat, policy_id in policy_for_seat.items():
                     episode_returns[policy_id] += float(rewards[seat])
                 if any(terminated.values()) or any(truncated.values()):
-                    outcomes = {
-                        policy_for_seat[seat]: infos[seat].get("outcome")
-                        for seat in AGENT_IDS
-                    }
+                    outcomes = {policy_for_seat[seat]: infos[seat].get("outcome") for seat in AGENT_IDS}
                     if set(outcomes.values()) == {"win", "loss"}:
                         for policy_id, outcome in outcomes.items():
                             totals[policy_id]["wins" if outcome == "win" else "losses"] += 1
@@ -1004,7 +1009,9 @@ def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     try:
         if args.command == "init":
-            return init_project(args.project, args.scene, args.mode, args.addon_path, args.package_source, not args.no_sync)
+            return init_project(
+                args.project, args.scene, args.mode, args.addon_path, args.package_source, not args.no_sync
+            )
         if args.command == "doctor":
             report = doctor(args.project, args.godot)
             print(json.dumps(report, sort_keys=True))

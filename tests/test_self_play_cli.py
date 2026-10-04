@@ -13,13 +13,15 @@ import gymnasium as gym
 import numpy as np
 import pytest
 
+pytest.importorskip("stable_baselines3")
+
 from godot_rl import project_cli as cli
 
 
 def make_project(tmp_path: Path) -> Path:
     project = tmp_path / "game"
     project.mkdir()
-    (project / "project.godot").write_text("[application]\nconfig/name=\"Test\"\n")
+    (project / "project.godot").write_text('[application]\nconfig/name="Test"\n')
     (project / "rl_training.tscn").write_text("[gd_scene format=3]\n")
     return project
 
@@ -64,12 +66,10 @@ class _ValidationEnv:
 
 class _BoxEvaluationEnv(_ValidationEnv):
     observation_spaces: ClassVar = {
-        agent_id: gym.spaces.Box(-1, 1, (2,), dtype=np.float32)
-        for agent_id in _ValidationEnv.agent_ids
+        agent_id: gym.spaces.Box(-1, 1, (2,), dtype=np.float32) for agent_id in _ValidationEnv.agent_ids
     }
     action_spaces: ClassVar = {
-        agent_id: gym.spaces.Box(-1, 1, (2,), dtype=np.float32)
-        for agent_id in _ValidationEnv.agent_ids
+        agent_id: gym.spaces.Box(-1, 1, (2,), dtype=np.float32) for agent_id in _ValidationEnv.agent_ids
     }
 
     def __init__(self):
@@ -272,9 +272,7 @@ def test_evaluate_is_deterministic_seat_swapped_and_read_only(tmp_path, monkeypa
     assert env.closed is True
 
 
-def test_evaluate_batches_box_actions_swaps_complete_vectors_and_averages_returns(
-    tmp_path, monkeypatch, capsys
-):
+def test_evaluate_batches_box_actions_swaps_complete_vectors_and_averages_returns(tmp_path, monkeypatch, capsys):
     project = _v2_project(tmp_path)
     checkpoint = project / "checkpoint"
     checkpoint.mkdir()

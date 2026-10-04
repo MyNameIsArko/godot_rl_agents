@@ -8,11 +8,7 @@ import pytest
 from gymnasium.utils.env_checker import check_env
 
 import godot_rl.core.project_env as env_module
-from godot_rl.core.project_env import (
-    GodotProjectEnv,
-    _GodotProcessSession,
-    _space_from_agent_spec,
-)
+from godot_rl.core.project_env import GodotProjectEnv, _GodotProcessSession, _space_from_agent_spec
 from godot_rl.core.protocol import ProtocolError, recv_frame, send_frame
 
 OBSERVATION_SPACE = {"obs": {"space": "box", "size": [2], "low": -1.0, "high": 1.0}}
@@ -218,7 +214,7 @@ def test_launch_command_and_process_flags(monkeypatch, os_name, show_window):
         "/godot",
         "--path",
         "/project",
-        *( [] if show_window else ["--headless", "--disable-render-loop"]),
+        *([] if show_window else ["--headless", "--disable-render-loop"]),
         "--scene",
         "res://train.tscn",
         "--port=11008",

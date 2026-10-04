@@ -94,10 +94,14 @@ class GodotProjectVecEnv(VecEnv):
         for _ in self._get_indices(indices):
             setattr(self.env, attr_name, value)
 
-    def env_method(self, method_name: str, *method_args: Any, indices: Iterable[int] | int | None = None, **method_kwargs: Any) -> list[Any]:
+    def env_method(
+        self, method_name: str, *method_args: Any, indices: Iterable[int] | int | None = None, **method_kwargs: Any
+    ) -> list[Any]:
         return [getattr(self.env, method_name)(*method_args, **method_kwargs) for _ in self._get_indices(indices)]
 
-    def env_is_wrapped(self, wrapper_class: type[gym.Wrapper], indices: Iterable[int] | int | None = None) -> list[bool]:
+    def env_is_wrapped(
+        self, wrapper_class: type[gym.Wrapper], indices: Iterable[int] | int | None = None
+    ) -> list[bool]:
         return [isinstance(self.env, wrapper_class) for _ in self._get_indices(indices)]
 
 

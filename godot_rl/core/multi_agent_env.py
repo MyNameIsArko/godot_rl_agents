@@ -8,17 +8,8 @@ from typing import Any
 import gymnasium as gym
 import numpy as np
 
-from godot_rl.core.project_env import (
-    _GodotProcessSession,
-    _json_value,
-    _space_from_agent_spec,
-)
-from godot_rl.core.protocol import (
-    PROTOCOL_MINOR,
-    PROTOCOL_V2_MAJOR,
-    ProtocolError,
-    validate_finite,
-)
+from godot_rl.core.project_env import _GodotProcessSession, _json_value, _space_from_agent_spec
+from godot_rl.core.protocol import PROTOCOL_MINOR, PROTOCOL_V2_MAJOR, ProtocolError, validate_finite
 
 AGENT_IDS = ("player_0", "player_1")
 
@@ -70,9 +61,7 @@ class GodotMultiAgentEnv:
         self._session.handshake()
 
     def _read_env_info(self) -> None:
-        self._session.send(
-            {"type": "env_info", "protocol": {"major": PROTOCOL_V2_MAJOR, "minor": PROTOCOL_MINOR}}
-        )
+        self._session.send({"type": "env_info", "protocol": {"major": PROTOCOL_V2_MAJOR, "minor": PROTOCOL_MINOR}})
         response = self._session.receive()
         _require_type(response, "env_info", "env_info")
         _require_protocol(response, "env_info")
@@ -102,9 +91,7 @@ class GodotMultiAgentEnv:
             observation_spaces[agent["id"]] = _parse_space(
                 agent["observation_space"], f"{field}.observation_space", True
             )
-            action_spaces[agent["id"]] = _parse_space(
-                agent["action_space"], f"{field}.action_space", False
-            )
+            action_spaces[agent["id"]] = _parse_space(agent["action_space"], f"{field}.action_space", False)
         if observation_spaces[AGENT_IDS[0]] != observation_spaces[AGENT_IDS[1]]:
             raise ProtocolError("env_info.agents observation_space values must match")
         if action_spaces[AGENT_IDS[0]] != action_spaces[AGENT_IDS[1]]:
@@ -112,9 +99,7 @@ class GodotMultiAgentEnv:
         self.observation_spaces = observation_spaces
         self.action_spaces = action_spaces
 
-    def reset(
-        self, *, seed: int | None = None
-    ) -> tuple[dict[str, object], dict[str, dict[str, object]]]:
+    def reset(self, *, seed: int | None = None) -> tuple[dict[str, object], dict[str, dict[str, object]]]:
         self._require_open()
         if seed is not None and (isinstance(seed, bool) or not isinstance(seed, int)):
             raise TypeError("seed must be an integer or None")
@@ -137,9 +122,7 @@ class GodotMultiAgentEnv:
             infos[agent_id] = _coerce_info(record["info"], f"{field}.info")
         return observations, infos
 
-    def step(
-        self, actions: dict[str, object]
-    ) -> tuple[
+    def step(self, actions: dict[str, object]) -> tuple[
         dict[str, object],
         dict[str, float],
         dict[str, bool],
@@ -150,9 +133,7 @@ class GodotMultiAgentEnv:
         actions = _require_agent_ids(actions, "step.actions")
         encoded_actions: dict[str, object] = {}
         for agent_id in AGENT_IDS:
-            value = _coerce_value(
-                actions[agent_id], self.action_spaces[agent_id], f"step.actions.{agent_id}"
-            )
+            value = _coerce_value(actions[agent_id], self.action_spaces[agent_id], f"step.actions.{agent_id}")
             encoded_actions[agent_id] = _json_value(value)
         self._session.send({"type": "step", "actions": encoded_actions})
 
@@ -170,18 +151,12 @@ class GodotMultiAgentEnv:
         for agent_id in AGENT_IDS:
             field = f"step.agents.{agent_id}"
             record = records[agent_id]
-            _require_keys(
-                record, {"observation", "reward", "terminated", "truncated", "info"}, field
-            )
+            _require_keys(record, {"observation", "reward", "terminated", "truncated", "info"}, field)
             observations[agent_id] = _coerce_value(
                 record["observation"], self.observation_spaces[agent_id], f"{field}.observation"
             )
             reward = record["reward"]
-            if (
-                isinstance(reward, bool)
-                or not isinstance(reward, numbers.Real)
-                or not math.isfinite(reward)
-            ):
+            if isinstance(reward, bool) or not isinstance(reward, numbers.Real) or not math.isfinite(reward):
                 raise ProtocolError(f"{field}.reward must be a finite number")
             rewards[agent_id] = float(reward)
             for flag in ("terminated", "truncated"):
@@ -320,10 +295,7 @@ def _coerce_value(value: Any, space: gym.Space, field: str) -> Any:
             raise ProtocolError(f"{field}.{min(missing)} is missing")
         if extra:
             raise ProtocolError(f"{field}.{min(extra)} is unknown")
-        return {
-            key: _coerce_value(value[key], child, f"{field}.{key}")
-            for key, child in space.spaces.items()
-        }
+        return {key: _coerce_value(value[key], child, f"{field}.{key}") for key, child in space.spaces.items()}
     if isinstance(space, gym.spaces.Box):
         try:
             value = np.asarray(value, dtype=space.dtype)

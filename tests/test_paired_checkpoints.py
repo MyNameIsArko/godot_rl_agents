@@ -15,18 +15,12 @@ import stable_baselines3
 from stable_baselines3 import PPO
 from stable_baselines3.common.buffers import RolloutBuffer
 from stable_baselines3.common.logger import Logger
-from stable_baselines3.common.policies import (
-    ActorCriticPolicy,
-    BasePolicy,
-    MultiInputActorCriticPolicy,
-)
+from stable_baselines3.common.policies import ActorCriticPolicy, BasePolicy, MultiInputActorCriticPolicy
 
 import godot_rl.training.self_play as self_play_module
 from godot_rl.training.self_play import SelfPlayTrainer, _SpaceOnlyEnv
 
-OBSERVATION_SPACE = gym.spaces.Dict(
-    {"obs": gym.spaces.Box(-1.0, 1.0, shape=(2,), dtype=np.float32)}
-)
+OBSERVATION_SPACE = gym.spaces.Dict({"obs": gym.spaces.Box(-1.0, 1.0, shape=(2,), dtype=np.float32)})
 ACTION_SPACE = gym.spaces.Dict({"action": gym.spaces.Discrete(2)})
 
 
@@ -79,8 +73,7 @@ class FakeEnv:
 
 class BoxObservationEnv(FakeEnv):
     observation_spaces: ClassVar = {
-        agent_id: gym.spaces.Box(-1.0, 1.0, shape=(2,), dtype=np.float32)
-        for agent_id in FakeEnv.agent_ids
+        agent_id: gym.spaces.Box(-1.0, 1.0, shape=(2,), dtype=np.float32) for agent_id in FakeEnv.agent_ids
     }
 
 
@@ -114,9 +107,7 @@ def test_checkpoint_contains_two_models_and_one_state_file(tmp_path):
 
     checkpoint = trainer.save_checkpoint()
     assert checkpoint.name == "000000000002"
-    assert {path.name for path in checkpoint.iterdir()} == {
-        "player_0.zip", "player_1.zip", "state.json"
-    }
+    assert {path.name for path in checkpoint.iterdir()} == {"player_0.zip", "player_1.zip", "state.json"}
     state = json.loads((checkpoint / "state.json").read_text())
     assert state["completed_timesteps"] == 2
     assert state["completed_updates"] == 1
@@ -154,9 +145,7 @@ def test_latest_points_to_complete_checkpoint(tmp_path):
 
     latest = json.loads((tmp_path / "models" / "duel" / "latest.json").read_text())
     assert latest == {"schema_version": 1, "checkpoint": "checkpoints/000000000002"}
-    assert trainer._checkpoint_complete(
-        tmp_path / "models" / "duel" / latest["checkpoint"]
-    )
+    assert trainer._checkpoint_complete(tmp_path / "models" / "duel" / latest["checkpoint"])
     assert trainer.latest_checkpoint(tmp_path / "models" / "duel") == checkpoint
     assert checkpoint.is_dir()
 
@@ -280,6 +269,7 @@ def test_synthetic_keyboard_interrupt_does_not_publish_unsafe_pair(tmp_path):
         run_name="duel",
         configuration_sha256="a" * 64,
     )
+
     def interrupted_train():
         raise KeyboardInterrupt
 
@@ -351,10 +341,7 @@ def test_deferred_sigint_publishes_matching_update_markers(tmp_path, monkeypatch
         trainer.learn(2)
 
     checkpoint = model_dir / "checkpoints" / "000000000002"
-    saved = {
-        agent_id: PPO.load(str(checkpoint / f"{agent_id}.zip"))
-        for agent_id in trainer.agent_ids
-    }
+    saved = {agent_id: PPO.load(str(checkpoint / f"{agent_id}.zip")) for agent_id in trainer.agent_ids}
     assert calls == ["player_0", "player_1"]
     assert [saved[agent_id].update_marker for agent_id in trainer.agent_ids] == [1, 1]
     state = json.loads((checkpoint / "state.json").read_text())

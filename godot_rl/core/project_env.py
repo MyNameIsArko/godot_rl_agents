@@ -12,19 +12,9 @@ from typing import Any, ClassVar
 import gymnasium as gym
 import numpy as np
 
-from godot_rl.core.protocol import (
-    CONNECTION_TIMEOUT,
-    DEFAULT_HOST,
-    PROTOCOL_MAJOR,
-    PROTOCOL_MINOR,
-    READ_TIMEOUT,
-    ProtocolError,
-    make_handshake,
-    recv_frame,
-    send_frame,
-    validate_finite,
-    validate_handshake,
-)
+from godot_rl.core.protocol import (CONNECTION_TIMEOUT, DEFAULT_HOST, PROTOCOL_MAJOR, PROTOCOL_MINOR, READ_TIMEOUT,
+                                    ProtocolError, make_handshake, recv_frame, send_frame, validate_finite,
+                                    validate_handshake)
 
 
 class _GodotProcessSession:
@@ -80,7 +70,7 @@ class _GodotProcessSession:
             raise FileNotFoundError(f"project.godot does not exist under: {self.project_path}")
         if not isinstance(self.scene, str) or not self.scene.startswith("res://") or not self.scene.endswith(".tscn"):
             raise ValueError("scene must be a res:// path ending in .tscn")
-        scene_path = pathlib.PurePosixPath(self.scene[len("res://"):])
+        scene_path = pathlib.PurePosixPath(self.scene[len("res://") :])
         if scene_path.is_absolute() or ".." in scene_path.parts:
             raise ValueError("scene must stay inside res://")
         resolved_scene = (self.project_path / pathlib.Path(*scene_path.parts)).resolve()
@@ -249,9 +239,7 @@ class GodotProjectEnv(gym.Env):
         if not isinstance(protocol, dict):
             raise ProtocolError("env_info is missing protocol version")
         if protocol.get("major") != PROTOCOL_MAJOR:
-            raise ProtocolError(
-                f"protocol major mismatch: peer={protocol.get('major')}, expected={PROTOCOL_MAJOR}"
-            )
+            raise ProtocolError(f"protocol major mismatch: peer={protocol.get('major')}, expected={PROTOCOL_MAJOR}")
         if response.get("agent_count") != 1:
             raise ValueError("GodotProjectEnv supports exactly one agent")
         self.observation_space = _space_from_agent_spec(response["observation_space"], observation=True)
@@ -372,7 +360,9 @@ def _space_from_agent_spec(spec: Any, *, observation: bool) -> gym.Space:
     if not isinstance(spec, dict):
         raise TypeError("space declaration must be a dictionary")
     if spec.get("type") == "dict" or spec.get("space") == "dict":
-        return gym.spaces.Dict({key: _space_from_spec(value, observation=observation) for key, value in spec["spaces"].items()})
+        return gym.spaces.Dict(
+            {key: _space_from_spec(value, observation=observation) for key, value in spec["spaces"].items()}
+        )
     if all(isinstance(value, dict) and ("space" in value or "action_type" in value) for value in spec.values()):
         return gym.spaces.Dict({key: _space_from_spec(value, observation=observation) for key, value in spec.items()})
     return _space_from_spec(spec, observation=observation)
@@ -407,5 +397,7 @@ def _space_from_spec(spec: dict[str, Any], *, observation: bool) -> gym.Space:
     if kind == "multidiscrete":
         return gym.spaces.MultiDiscrete(np.asarray(spec["nvec"], dtype=np.int64))
     if kind == "dict":
-        return gym.spaces.Dict({key: _space_from_spec(value, observation=observation) for key, value in spec["spaces"].items()})
+        return gym.spaces.Dict(
+            {key: _space_from_spec(value, observation=observation) for key, value in spec["spaces"].items()}
+        )
     raise ValueError(f"unsupported space declaration: {kind!r}")

@@ -103,9 +103,17 @@ def test_vecenv_methods_delegate_to_the_single_raw_environment():
     ("space", "key", "expected"),
     [
         (gym.spaces.Discrete(2), None, gym.spaces.Discrete(2)),
-        (gym.spaces.Box(-1.0, 1.0, shape=(2,), dtype=np.float32), None, gym.spaces.Box(-1.0, 1.0, shape=(2,), dtype=np.float32)),
+        (
+            gym.spaces.Box(-1.0, 1.0, shape=(2,), dtype=np.float32),
+            None,
+            gym.spaces.Box(-1.0, 1.0, shape=(2,), dtype=np.float32),
+        ),
         (gym.spaces.Dict({"action": gym.spaces.Discrete(2)}), "action", gym.spaces.Discrete(2)),
-        (gym.spaces.Dict({"action": gym.spaces.Box(-1.0, 1.0, shape=(1,), dtype=np.float32)}), "action", gym.spaces.Box(-1.0, 1.0, shape=(1,), dtype=np.float32)),
+        (
+            gym.spaces.Dict({"action": gym.spaces.Box(-1.0, 1.0, shape=(1,), dtype=np.float32)}),
+            "action",
+            gym.spaces.Box(-1.0, 1.0, shape=(1,), dtype=np.float32),
+        ),
     ],
 )
 def test_extract_action_head_supports_one_direct_or_dict_head(space, key, expected):

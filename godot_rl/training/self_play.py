@@ -100,17 +100,15 @@ class SelfPlayTrainer:
         self._last_completed_timesteps = 0
         self._unsafe_update_interruption = False
         self._interrupted_checkpoint_saved = False
-        self._episode_starts = {
-            agent_id: np.ones(1, dtype=bool) for agent_id in AGENT_IDS
-        }
+        self._episode_starts = {agent_id: np.ones(1, dtype=bool) for agent_id in AGENT_IDS}
 
         for index, agent_id in enumerate(AGENT_IDS):
             action_key, action_space = _extract_action_head(env.action_spaces[agent_id])
             self._action_keys[agent_id] = action_key
             self._action_spaces[agent_id] = action_space
-            policy = "MultiInputPolicy" if isinstance(
-                env.observation_spaces[agent_id], gym.spaces.Dict
-            ) else "MlpPolicy"
+            policy = (
+                "MultiInputPolicy" if isinstance(env.observation_spaces[agent_id], gym.spaces.Dict) else "MlpPolicy"
+            )
             model_kwargs = dict(ppo)
             model_kwargs["seed"] = seed + index
             self.models[agent_id] = PPO(
@@ -124,12 +122,7 @@ class SelfPlayTrainer:
 
     @staticmethod
     def _validate_run_name(run_name: str) -> None:
-        if (
-            not run_name
-            or "/" in run_name
-            or "\\" in run_name
-            or run_name in {".", ".."}
-        ):
+        if not run_name or "/" in run_name or "\\" in run_name or run_name in {".", ".."}:
             raise ValueError("run_name must be a single safe path component")
 
     @staticmethod
@@ -160,9 +153,7 @@ class SelfPlayTrainer:
         else:
             output_formats.append("tensorboard")
         for agent_id in AGENT_IDS:
-            self.models[agent_id].set_logger(
-                configure(str(self.run_dir / agent_id), output_formats)
-            )
+            self.models[agent_id].set_logger(configure(str(self.run_dir / agent_id), output_formats))
 
     def _validate_model_spaces(self) -> None:
         for agent_id in AGENT_IDS:
@@ -276,9 +267,7 @@ class SelfPlayTrainer:
 
                     current_timesteps += 1
                     self._observations = next_observations
-                    self._episode_starts = {
-                        agent_id: np.asarray([done], dtype=bool) for agent_id in AGENT_IDS
-                    }
+                    self._episode_starts = {agent_id: np.asarray([done], dtype=bool) for agent_id in AGENT_IDS}
                     if done:
                         self._observations, _ = self.env.reset()
 
@@ -361,14 +350,9 @@ class SelfPlayTrainer:
 
     @staticmethod
     def _new_rollout_stats() -> dict[str, dict[str, float | int]]:
-        return {
-            agent_id: {"reward": 0.0, "win": 0, "loss": 0, "draw": 0, "episodes": 0}
-            for agent_id in AGENT_IDS
-        }
+        return {agent_id: {"reward": 0.0, "win": 0, "loss": 0, "draw": 0, "episodes": 0} for agent_id in AGENT_IDS}
 
-    def _append_rollout_metrics(
-        self, completed_timesteps: int, stats: Mapping[str, Mapping[str, float | int]]
-    ) -> None:
+    def _append_rollout_metrics(self, completed_timesteps: int, stats: Mapping[str, Mapping[str, float | int]]) -> None:
         if self.run_dir is None:
             return
         self.run_dir.mkdir(parents=True, exist_ok=True)
@@ -432,17 +416,10 @@ class SelfPlayTrainer:
         completed_timesteps: int | None = None,
         completed_updates: int | None = None,
     ) -> Path:
-        target_dir, target_name, config_hash = self._checkpoint_context(
-            model_dir, run_name, configuration_sha256
-        )
+        target_dir, target_name, config_hash = self._checkpoint_context(model_dir, run_name, configuration_sha256)
         timesteps = self._current_timesteps() if completed_timesteps is None else completed_timesteps
         updates = self.completed_updates if completed_updates is None else completed_updates
-        if (
-            not isinstance(timesteps, int)
-            or isinstance(timesteps, bool)
-            or timesteps < 0
-            or timesteps % self.n_steps
-        ):
+        if not isinstance(timesteps, int) or isinstance(timesteps, bool) or timesteps < 0 or timesteps % self.n_steps:
             raise ValueError("completed_timesteps must be a non-negative multiple of ppo.n_steps")
         if not isinstance(updates, int) or isinstance(updates, bool) or updates < 0:
             raise ValueError("completed_updates must be a non-negative integer")
@@ -620,11 +597,7 @@ class SelfPlayTrainer:
         expected_name = run_name if run_name is not None else self.run_name
         if expected_name is None:
             raise ValueError("run_name is required to resume a checkpoint")
-        config_hash = (
-            configuration_sha256
-            if configuration_sha256 is not None
-            else self.configuration_sha256
-        )
+        config_hash = configuration_sha256 if configuration_sha256 is not None else self.configuration_sha256
         if config_hash is None:
             raise ValueError("configuration_sha256 is required to resume a checkpoint")
         self._validate_hash(config_hash)
@@ -653,9 +626,7 @@ class SelfPlayTrainer:
         self.seed = state["seed"]
         self._last_completed_timesteps = self.completed_timesteps
         self._observations = None
-        self._episode_starts = {
-            agent_id: np.ones(1, dtype=bool) for agent_id in AGENT_IDS
-        }
+        self._episode_starts = {agent_id: np.ones(1, dtype=bool) for agent_id in AGENT_IDS}
         self.model_dir = checkpoint_path.parent.parent
         self.run_name = expected_name
         self.configuration_sha256 = config_hash
@@ -664,9 +635,15 @@ class SelfPlayTrainer:
     @staticmethod
     def _validate_state(state: Any) -> None:
         required = {
-            "schema_version", "package_version", "run_name", "agent_ids",
-            "completed_timesteps", "completed_updates", "seed",
-            "configuration_sha256", "models",
+            "schema_version",
+            "package_version",
+            "run_name",
+            "agent_ids",
+            "completed_timesteps",
+            "completed_updates",
+            "seed",
+            "configuration_sha256",
+            "models",
         }
         if not isinstance(state, dict) or set(state) != required:
             raise ValueError("checkpoint state.json has an invalid shape")

@@ -4,8 +4,8 @@ import threading
 import numpy as np
 import pytest
 
-from godot_rl.core.project_env import _GodotProcessSession
 from godot_rl.core.multi_agent_env import GodotMultiAgentEnv
+from godot_rl.core.project_env import _GodotProcessSession
 from godot_rl.core.protocol import ProtocolError, recv_frame, send_frame
 
 OBS = {"obs": {"space": "box", "size": [2], "low": -1.0, "high": 1.0}}
@@ -189,7 +189,17 @@ def test_action_space_rejects_unsupported_shapes(action_space):
     peer.close()
 
 
-@pytest.mark.parametrize("agent_map", [{"player_0": _records("reset")["player_0"]}, {"player_0": _records("reset")["player_0"], "player_1": _records("reset")["player_1"], "spectator": _records("reset")["player_0"]}])
+@pytest.mark.parametrize(
+    "agent_map",
+    [
+        {"player_0": _records("reset")["player_0"]},
+        {
+            "player_0": _records("reset")["player_0"],
+            "player_1": _records("reset")["player_1"],
+            "spectator": _records("reset")["player_0"],
+        },
+    ],
+)
 def test_reset_rejects_missing_or_unknown_agent_ids(agent_map):
     peer = FakePeer(reset={"type": "reset", "agents": agent_map})
     env = make_env(peer)
@@ -199,7 +209,17 @@ def test_reset_rejects_missing_or_unknown_agent_ids(agent_map):
     peer.close()
 
 
-@pytest.mark.parametrize("agent_map", [{"player_0": _records("step")["player_0"]}, {"player_0": _records("step")["player_0"], "player_1": _records("step")["player_1"], "spectator": _records("step")["player_0"]}])
+@pytest.mark.parametrize(
+    "agent_map",
+    [
+        {"player_0": _records("step")["player_0"]},
+        {
+            "player_0": _records("step")["player_0"],
+            "player_1": _records("step")["player_1"],
+            "spectator": _records("step")["player_0"],
+        },
+    ],
+)
 def test_step_response_rejects_missing_or_unknown_agent_ids(agent_map):
     peer = FakePeer(step={"type": "step", "agents": agent_map})
     env = make_env(peer)
@@ -237,9 +257,7 @@ def test_invalid_action_is_rejected_before_transmission():
     peer.close()
 
 
-@pytest.mark.parametrize(
-    "reward", [float("nan"), float("inf"), float("-inf"), "not-a-number"]
-)
+@pytest.mark.parametrize("reward", [float("nan"), float("inf"), float("-inf"), "not-a-number"])
 def test_nonfinite_reward_reports_agent_field_path(reward):
     peer = FakePeer()
     env = make_env(peer)
