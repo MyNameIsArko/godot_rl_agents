@@ -21,3 +21,19 @@ def test_doctor_rejects_missing_environment(tmp_path):
 
     assert report["environment"]["ok"] is False
     assert report["ok"] is False
+
+
+def test_doctor_accepts_macos_app_bundle(tmp_path, monkeypatch):
+    monkeypatch.setattr("godot_rl.main.sys.platform", "darwin")
+    binary = tmp_path / "Game.app/Contents/MacOS/Game"
+    binary.parent.mkdir(parents=True)
+    binary.touch()
+    report = _doctor_report(str(tmp_path / "Game"), 0)
+    assert report["environment"] == {"ok": True, "path": str(tmp_path / "Game.app")}
+
+
+def test_doctor_rejects_macos_bundle_without_executable(tmp_path, monkeypatch):
+    monkeypatch.setattr("godot_rl.main.sys.platform", "darwin")
+    (tmp_path / "Game.app").mkdir()
+    report = _doctor_report(str(tmp_path / "Game"), 0)
+    assert report["environment"]["ok"] is False
