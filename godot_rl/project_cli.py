@@ -704,9 +704,252 @@ def train_project(
     return 0
 
 
+def _validate_self_play_run_name(name: str) -> None:
+    if not isinstance(name, str) or re.fullmatch(r"[A-Za-z0-9_-][A-Za-z0-9_.-]*", name) is None:
+        raise ValueError("name must be a portable safe path component using letters, digits, '.', '_' or '-'")
+
+
+def self_play_project(
+    project_value: str | pathlib.Path,
+    timesteps: int,
+    name: str,
+    resume: str | None = None,
+    show_window: bool = False,
+    seed: int | None = None,
+    speedup: float | None = None,
+    torch_threads: int = 1,
+    godot: str | None = None,
+) -> int:
+    _validate_speedup_override(speedup)
+    _validate_self_play_run_name(name)
+    if timesteps <= 0 or torch_threads <= 0:
+        raise ValueError("timesteps and torch-threads must be positive")
+    project = _project_path(project_value)
+    config = read_config(project)
+    if config["schema_version"] != SELF_PLAY_SCHEMA_VERSION or config["mode"] != "self_play":
+        raise ValueError("gdrl self-play requires schema version 2 with mode = 'self_play'")
+    if timesteps % config["ppo"]["n_steps"]:
+        raise ValueError("timesteps must be a positive multiple of ppo.n_steps")
+
+    report = doctor(project, godot)
+    if not report["ok"]:
+        print(json.dumps(report, sort_keys=True))
+        return 1
+
+    model_dir = project / "rl" / "models" / name
+    run_dir = project / "rl" / "runs" / name
+    resume_path = pathlib.Path(resume).expanduser().resolve() if resume else None
+    if resume_path is None and model_dir.exists():
+        raise ValueError(f"model directory already exists: {model_dir}")
+    if resume_path is not None:
+        checkpoints_dir = model_dir / "checkpoints"
+        resolved_checkpoints_dir = checkpoints_dir.resolve()
+        if (
+            resolved_checkpoints_dir != checkpoints_dir.absolute()
+            or resume_path.parent != resolved_checkpoints_dir
+        ):
+            raise ValueError(
+                "resume checkpoint must be under project/rl/models/<name>/checkpoints"
+            )
+        if not resume_path.is_dir():
+            raise ValueError(f"resume checkpoint directory does not exist: {resume_path}")
+
+    environment: Any = None
+    trainer: Any = None
+    try:
+        import torch
+
+        from godot_rl.training.self_play import SelfPlayTrainer
+
+        torch.set_num_threads(torch_threads)
+        effective_seed = config["seed"] if seed is None else seed
+        effective_speedup = config["speedup"] if speedup is None else speedup
+        environment = GodotMultiAgentEnv(
+            godot_path=pathlib.Path(report["godot"]["path"]),
+            project_path=project,
+            scene=config["scene"],
+            port=config["port"],
+            seed=effective_seed,
+            speedup=effective_speedup,
+            show_window=show_window,
+        )
+        configuration_sha256 = SelfPlayTrainer.configuration_hash(project / "rl" / "config.toml")
+        trainer_kwargs = {
+            "seed": effective_seed,
+            "model_dir": model_dir,
+            "run_dir": run_dir,
+            "run_name": name,
+            "configuration_sha256": configuration_sha256,
+            "checkpoint_interval": config["self_play"]["checkpoint_interval"],
+        }
+        if resume_path is None:
+            trainer = SelfPlayTrainer(environment, config["ppo"], **trainer_kwargs)
+        else:
+            trainer = SelfPlayTrainer.from_checkpoint(
+                environment,
+                config["ppo"],
+                resume_path,
+                **trainer_kwargs,
+            )
+            if timesteps <= trainer.completed_timesteps:
+                raise ValueError(
+                    "timesteps must exceed the completed timestep in the resumed checkpoint"
+                )
+        trainer.learn(timesteps)
+        final_checkpoint = model_dir / "checkpoints" / f"{trainer.completed_timesteps:012d}"
+        if final_checkpoint.exists():
+            if not SelfPlayTrainer._checkpoint_complete(final_checkpoint):
+                raise ValueError(f"final checkpoint is incomplete: {final_checkpoint}")
+        else:
+            trainer.save_checkpoint()
+    except KeyboardInterrupt:
+        if (
+            trainer is not None
+            and not getattr(trainer, "_interrupted_checkpoint_saved", False)
+            and not getattr(trainer, "_unsafe_update_interruption", False)
+        ):
+            trainer.save_interrupted_checkpoint()
+        raise
+    finally:
+        if environment is not None:
+            environment.close()
+    print(f"Saved self-play checkpoints to {model_dir}")
+    return 0
+
+
+def evaluate_project(
+    project_value: str | pathlib.Path,
+    checkpoint: str,
+    episodes: int,
+    show_window: bool = False,
+    seed: int | None = None,
+    speedup: float | None = None,
+    max_steps: int = 10000,
+    godot: str | None = None,
+) -> int:
+    _validate_speedup_override(speedup)
+    if episodes <= 0 or episodes % 2:
+        raise ValueError("episodes must be a positive even number")
+    if max_steps <= 0:
+        raise ValueError("max-steps must be positive")
+    project = _project_path(project_value)
+    config = read_config(project)
+    if config["schema_version"] != SELF_PLAY_SCHEMA_VERSION or config["mode"] != "self_play":
+        raise ValueError("gdrl evaluate requires schema version 2 with mode = 'self_play'")
+    report = doctor(project, godot)
+    if not report["ok"]:
+        print(json.dumps(report, sort_keys=True))
+        return 1
+    checkpoint_path = pathlib.Path(checkpoint).expanduser().resolve()
+    if not checkpoint_path.is_dir():
+        raise ValueError(f"checkpoint directory does not exist: {checkpoint_path}")
+
+    environment: Any = None
+    try:
+        from godot_rl.wrappers.project_sb3 import _batch_observation
+        from godot_rl.training.self_play import SelfPlayTrainer
+
+        try:
+            state = json.loads((checkpoint_path / "state.json").read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            raise ValueError(f"invalid checkpoint state: {checkpoint_path / 'state.json'}") from exc
+        if not isinstance(state, dict) or not isinstance(state.get("run_name"), str):
+            raise TypeError("checkpoint state has no valid run_name")
+        environment = GodotMultiAgentEnv(
+            godot_path=pathlib.Path(report["godot"]["path"]),
+            project_path=project,
+            scene=config["scene"],
+            port=config["port"],
+            seed=config["seed"] if seed is None else seed,
+            speedup=config["speedup"] if speedup is None else speedup,
+            show_window=show_window,
+        )
+        trainer = SelfPlayTrainer.from_checkpoint(
+            environment,
+            config["ppo"],
+            checkpoint_path,
+            run_name=state.get("run_name"),
+            configuration_sha256=SelfPlayTrainer.configuration_hash(project / "rl" / "config.toml"),
+            seed=config["seed"] if seed is None else seed,
+        )
+        totals = {
+            agent_id: {"wins": 0, "losses": 0, "draws": 0, "return": 0.0, "episodes": 0}
+            for agent_id in AGENT_IDS
+        }
+        for episode in range(episodes):
+            swapped = episode >= episodes // 2
+            policy_for_seat = {
+                AGENT_IDS[0]: AGENT_IDS[1] if swapped else AGENT_IDS[0],
+                AGENT_IDS[1]: AGENT_IDS[0] if swapped else AGENT_IDS[1],
+            }
+            observations, _ = environment.reset(
+                seed=(config["seed"] if seed is None else seed) + episode
+            )
+            finished = False
+            episode_returns = {agent_id: 0.0 for agent_id in AGENT_IDS}
+            for _ in range(max_steps):
+                actions = {}
+                for seat, policy_id in policy_for_seat.items():
+                    batched_observation = _batch_observation(
+                        observations[seat], environment.observation_spaces[seat]
+                    )
+                    raw_action, _ = trainer.models[policy_id].predict(
+                        batched_observation, deterministic=True
+                    )
+                    actions[seat] = trainer._environment_action(policy_id, raw_action)
+                observations, rewards, terminated, truncated, infos = environment.step(actions)
+                if set(terminated.values()) != {True} and set(terminated.values()) != {False}:
+                    raise ValueError("evaluation termination flags are not synchronized")
+                if set(truncated.values()) != {True} and set(truncated.values()) != {False}:
+                    raise ValueError("evaluation truncation flags are not synchronized")
+                if any(terminated.values()) and any(truncated.values()):
+                    raise ValueError("evaluation termination and truncation overlap")
+                for seat, policy_id in policy_for_seat.items():
+                    episode_returns[policy_id] += float(rewards[seat])
+                if any(terminated.values()) or any(truncated.values()):
+                    outcomes = {
+                        policy_for_seat[seat]: infos[seat].get("outcome")
+                        for seat in AGENT_IDS
+                    }
+                    if set(outcomes.values()) == {"win", "loss"}:
+                        for policy_id, outcome in outcomes.items():
+                            totals[policy_id]["wins" if outcome == "win" else "losses"] += 1
+                    elif set(outcomes.values()) == {"draw"}:
+                        for policy_id in AGENT_IDS:
+                            totals[policy_id]["draws"] += 1
+                    else:
+                        raise ValueError("evaluation terminal outcomes are not complementary")
+                    for policy_id in AGENT_IDS:
+                        totals[policy_id]["return"] += episode_returns[policy_id]
+                        totals[policy_id]["episodes"] += 1
+                    finished = True
+                    break
+            if not finished:
+                raise ValueError(f"evaluation episode {episode + 1} did not finish within --max-steps")
+        result = {"ok": True, "episodes": episodes}
+        for policy_id in AGENT_IDS:
+            stats = totals[policy_id]
+            result["policy_0" if policy_id == AGENT_IDS[0] else "policy_1"] = {
+                "wins": stats["wins"],
+                "losses": stats["losses"],
+                "draws": stats["draws"],
+                "mean_reward": stats["return"] / stats["episodes"],
+            }
+        result["seats"] = {
+            "normal_episodes": episodes // 2,
+            "swapped_episodes": episodes // 2,
+        }
+        print(json.dumps(result, sort_keys=True))
+        return 0
+    finally:
+        if environment is not None:
+            environment.close()
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="gdrl")
     commands = parser.add_subparsers(dest="command", required=True)
+
     init = commands.add_parser("init")
     init.add_argument("--project", required=True)
     init.add_argument("--scene", required=True)
@@ -714,20 +957,46 @@ def _parser() -> argparse.ArgumentParser:
     init.add_argument("--addon-path")
     init.add_argument("--package-source")
     init.add_argument("--no-sync", action="store_true")
-    for command in ("doctor", "validate", "train"):
-        sub = commands.add_parser(command)
-        sub.add_argument("--project", required=True)
-        sub.add_argument("--godot")
-        if command == "validate":
-            sub.add_argument("--steps", type=int, default=32)
-        if command == "train":
-            sub.add_argument("--timesteps", type=int, required=True)
-            sub.add_argument("--name", required=True)
-            sub.add_argument("--resume")
-            sub.add_argument("--show-window", action="store_true")
-            sub.add_argument("--seed", type=int)
-            sub.add_argument("--speedup", type=float)
-            sub.add_argument("--torch-threads", type=int, default=1)
+
+    doctor_parser = commands.add_parser("doctor")
+    doctor_parser.add_argument("--project", required=True)
+    doctor_parser.add_argument("--godot")
+
+    validate = commands.add_parser("validate")
+    validate.add_argument("--project", required=True)
+    validate.add_argument("--steps", type=int, default=32)
+    validate.add_argument("--godot")
+
+    train = commands.add_parser("train")
+    train.add_argument("--project", required=True)
+    train.add_argument("--timesteps", type=int, required=True)
+    train.add_argument("--name", required=True)
+    train.add_argument("--resume")
+    train.add_argument("--show-window", action="store_true")
+    train.add_argument("--seed", type=int)
+    train.add_argument("--speedup", type=float)
+    train.add_argument("--torch-threads", type=int, default=1)
+    train.add_argument("--godot")
+    self_play = commands.add_parser("self-play")
+    self_play.add_argument("--project", required=True)
+    self_play.add_argument("--timesteps", type=int, required=True)
+    self_play.add_argument("--name", required=True)
+    self_play.add_argument("--resume")
+    self_play.add_argument("--show-window", action="store_true")
+    self_play.add_argument("--seed", type=int)
+    self_play.add_argument("--speedup", type=float)
+    self_play.add_argument("--torch-threads", type=int, default=1)
+    self_play.add_argument("--godot")
+
+    evaluate = commands.add_parser("evaluate")
+    evaluate.add_argument("--project", required=True)
+    evaluate.add_argument("--checkpoint", required=True)
+    evaluate.add_argument("--episodes", type=int, required=True)
+    evaluate.add_argument("--show-window", action="store_true")
+    evaluate.add_argument("--seed", type=int)
+    evaluate.add_argument("--speedup", type=float)
+    evaluate.add_argument("--max-steps", type=int, default=10000)
+    evaluate.add_argument("--godot")
     return parser
 
 
@@ -742,8 +1011,40 @@ def main(argv: list[str] | None = None) -> int:
             return 0 if report["ok"] else 1
         if args.command == "validate":
             return validate_project(args.project, args.steps, args.godot)
-        return train_project(args.project, args.timesteps, args.name, args.resume,
-                             args.show_window, args.seed, args.speedup, args.torch_threads, args.godot)
+        if args.command == "train":
+            return train_project(
+                args.project,
+                args.timesteps,
+                args.name,
+                args.resume,
+                args.show_window,
+                args.seed,
+                args.speedup,
+                args.torch_threads,
+                args.godot,
+            )
+        if args.command == "self-play":
+            return self_play_project(
+                args.project,
+                args.timesteps,
+                args.name,
+                args.resume,
+                args.show_window,
+                args.seed,
+                args.speedup,
+                args.torch_threads,
+                args.godot,
+            )
+        return evaluate_project(
+            args.project,
+            args.checkpoint,
+            args.episodes,
+            args.show_window,
+            args.seed,
+            args.speedup,
+            args.max_steps,
+            args.godot,
+        )
     except KeyboardInterrupt:
         return 130
     except (OSError, TypeError, ValueError, subprocess.CalledProcessError) as exc:

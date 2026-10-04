@@ -96,7 +96,7 @@ def get_args():
 
 
 def main():
-    if len(sys.argv) > 1 and sys.argv[1] in {"init", "doctor", "validate", "train"}:
+    if len(sys.argv) > 1 and sys.argv[1] in {"init", "doctor", "validate", "train", "self-play", "evaluate"}:
         from godot_rl.project_cli import main as project_main
 
         return project_main(sys.argv[1:])
